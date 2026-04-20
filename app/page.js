@@ -13,31 +13,56 @@ export default function Home() {
   const canvasRef = useRef(null)
   const sectionRef = useRef(null)
   const framesRef = useRef([])
+  const bgColorsRef = useRef([]) // sampled per-frame background colors
   const currentFrameRef = useRef(0)
 
   const [loadedCount, setLoadedCount] = useState(0)
-  const [phase, setPhase] = useState('loading') // loading | entering | scrolling | done
+  const [phase, setPhase] = useState('loading')
   const [assemblyDone, setAssemblyDone] = useState(false)
   const autoScrollRaf = useRef(null)
   const allLoadedRef = useRef(false)
+
+  // Sample background color from a loaded image (corner pixels = darkest bg point)
+  const sampleBg = (img) => {
+    try {
+      const s = document.createElement('canvas')
+      s.width = 4; s.height = 4
+      const c = s.getContext('2d')
+      // Sample top-left corner of original image
+      c.drawImage(img, 0, 0, 60, 60, 0, 0, 4, 4)
+      const corner = c.getImageData(0, 0, 1, 1).data
+      // Sample center-top (lighter gradient center)
+      c.drawImage(img, img.naturalWidth / 2 - 30, 10, 60, 60, 0, 0, 4, 4)
+      const center = c.getImageData(0, 0, 1, 1).data
+      return {
+        edge: `rgb(${corner[0]},${corner[1]},${corner[2]})`,
+        mid: `rgb(${center[0]},${center[1]},${center[2]})`,
+      }
+    } catch {
+      return { edge: '#b8b8b8', mid: '#d8d8d8' }
+    }
+  }
 
   // ── Preload all frames ──────────────────────────────
   useEffect(() => {
     let loaded = 0
     const images = new Array(TOTAL_FRAMES)
+    const colors = new Array(TOTAL_FRAMES)
 
     for (let i = 1; i <= TOTAL_FRAMES; i++) {
       const img = new Image()
       img.src = `/frames/frame_${pad(i)}.jpg`
+      const idx = i - 1
       img.onload = () => {
         loaded++
+        colors[idx] = sampleBg(img)
         setLoadedCount(loaded)
         if (loaded === TOTAL_FRAMES) {
           allLoadedRef.current = true
           framesRef.current = images
+          bgColorsRef.current = colors
           drawFrame(0)
 
-          // Loading done → start sequence
           setTimeout(() => setPhase('entering'), 400)
           setTimeout(() => {
             setPhase('scrolling')
@@ -45,7 +70,7 @@ export default function Home() {
           }, 1400)
         }
       }
-      images[i - 1] = img
+      images[idx] = img
     }
   }, [])
 
@@ -66,10 +91,11 @@ export default function Home() {
       ctx.scale(dpr, dpr)
     }
 
-    // Background gradient matching the studio grey of the video frames
+    // Per-frame sampled background gradient — matches the video's studio lighting exactly
+    const bg = bgColorsRef.current[index] || { mid: '#d8d8d8', edge: '#b8b8b8' }
     const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7)
-    grad.addColorStop(0, '#d8d8d8')
-    grad.addColorStop(1, '#b8b8b8')
+    grad.addColorStop(0, bg.mid)
+    grad.addColorStop(1, bg.edge)
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, w, h)
 
