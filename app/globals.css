@@ -1,0 +1,42 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #e8e8e8;
+  --bg-dark: #111111;
+  --white: #ffffff;
+  --black: #0a0a0a;
+  --red: #e30613;
+  --red-dim: rgba(227, 6, 19, 0.15);
+  --grey-light: #d0d0d0;
+  --grey-mid: #888888;
+  --grey-dark: #333333;
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html {
+  scroll-behavior: auto;
+  background: var(--bg-dark);
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg-dark);
+  color: var(--white);
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--red);
+  border-radius: 2px;
+}
