@@ -66,20 +66,25 @@ export default function Home() {
       ctx.scale(dpr, dpr)
     }
 
-    // Object-fit: cover
+    // Fill background first so grey extends seamlessly beyond image
+    ctx.fillStyle = '#e8e8e8'
+    ctx.fillRect(0, 0, w, h)
+
+    // Object-fit: contain — shows full image, no cropping on any screen size
     const imgRatio = img.naturalWidth / img.naturalHeight
     const canvasRatio = w / h
     let dw, dh, dx, dy
 
     if (imgRatio > canvasRatio) {
-      dh = h; dw = dh * imgRatio
-      dx = (w - dw) / 2; dy = 0
-    } else {
-      dw = w; dh = dw / imgRatio
+      // Landscape image in portrait viewport — fit by width
+      dw = w; dh = w / imgRatio
       dx = 0; dy = (h - dh) / 2
+    } else {
+      // Portrait image in landscape viewport — fit by height
+      dh = h; dw = h * imgRatio
+      dx = (w - dw) / 2; dy = 0
     }
 
-    ctx.clearRect(0, 0, w, h)
     ctx.drawImage(img, dx, dy, dw, dh)
   }
 
