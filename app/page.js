@@ -66,24 +66,28 @@ export default function Home() {
       ctx.scale(dpr, dpr)
     }
 
-    // Fill background first so grey extends seamlessly beyond image
-    ctx.fillStyle = '#e8e8e8'
+    // Background gradient matching the studio grey of the video frames
+    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7)
+    grad.addColorStop(0, '#d8d8d8')
+    grad.addColorStop(1, '#b8b8b8')
+    ctx.fillStyle = grad
     ctx.fillRect(0, 0, w, h)
 
-    // Object-fit: contain — shows full image, no cropping on any screen size
+    // Fit by width (contain), then zoom 1.45x so the car fills more of the screen
+    // Only clips grey background edges, never the car itself
+    const ZOOM = 1.45
     const imgRatio = img.naturalWidth / img.naturalHeight
     const canvasRatio = w / h
-    let dw, dh, dx, dy
+    let dw, dh
 
     if (imgRatio > canvasRatio) {
-      // Landscape image in portrait viewport — fit by width
-      dw = w; dh = w / imgRatio
-      dx = 0; dy = (h - dh) / 2
+      dw = w * ZOOM; dh = dw / imgRatio
     } else {
-      // Portrait image in landscape viewport — fit by height
-      dh = h; dw = h * imgRatio
-      dx = (w - dw) / 2; dy = 0
+      dh = h * ZOOM; dw = dh * imgRatio
     }
+
+    const dx = (w - dw) / 2
+    const dy = (h - dh) / 2
 
     ctx.drawImage(img, dx, dy, dw, dh)
   }
