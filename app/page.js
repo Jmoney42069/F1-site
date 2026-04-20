@@ -3,63 +3,93 @@
 import { useEffect, useRef, useState } from 'react'
 import styles from './page.module.css'
 
+const TOTAL_FRAMES = 121
+
+function pad(n) {
+  return String(n).padStart(4, '0')
+}
+
 export default function Home() {
-  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
   const sectionRef = useRef(null)
+  const framesRef = useRef([])
+  const currentFrameRef = useRef(0)
+
+  const [loadedCount, setLoadedCount] = useState(0)
   const [phase, setPhase] = useState('loading') // loading | entering | scrolling | done
-  const [loadPct, setLoadPct] = useState(0)
-  const [scrollProgress, setScrollProgress] = useState(0)
   const [assemblyDone, setAssemblyDone] = useState(false)
-  const videoReadyRef = useRef(false)
   const autoScrollRaf = useRef(null)
+  const allLoadedRef = useRef(false)
 
-  // Animate loading bar to ~80% while waiting for video
+  // ── Preload all frames ──────────────────────────────
   useEffect(() => {
-    let val = 0
-    const interval = setInterval(() => {
-      val += Math.random() * 4
-      if (val >= 80) { clearInterval(interval); val = 80 }
-      setLoadPct(Math.min(val, 80))
-    }, 60)
-    return () => clearInterval(interval)
-  }, [])
+    let loaded = 0
+    const images = new Array(TOTAL_FRAMES)
 
-  // Load video, then kick off the sequence
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+    for (let i = 1; i <= TOTAL_FRAMES; i++) {
+      const img = new Image()
+      img.src = `/frames/frame_${pad(i)}.jpg`
+      img.onload = () => {
+        loaded++
+        setLoadedCount(loaded)
+        if (loaded === TOTAL_FRAMES) {
+          allLoadedRef.current = true
+          framesRef.current = images
+          drawFrame(0)
 
-    const onReady = () => {
-      if (videoReadyRef.current) return
-      videoReadyRef.current = true
-      video.pause()
-      video.currentTime = 0
-
-      // Fill bar to 100%, then fade out loading screen
-      setLoadPct(100)
-      setTimeout(() => setPhase('entering'), 500)
-      setTimeout(() => {
-        setPhase('scrolling')
-        startAutoScroll()
-      }, 1400)
-    }
-
-    video.addEventListener('canplay', onReady)
-    video.addEventListener('loadedmetadata', onReady)
-    video.load()
-
-    return () => {
-      video.removeEventListener('canplay', onReady)
-      video.removeEventListener('loadedmetadata', onReady)
+          // Loading done → start sequence
+          setTimeout(() => setPhase('entering'), 400)
+          setTimeout(() => {
+            setPhase('scrolling')
+            startAutoScroll()
+          }, 1400)
+        }
+      }
+      images[i - 1] = img
     }
   }, [])
 
+  // ── Draw a specific frame to canvas ────────────────
+  const drawFrame = (index) => {
+    const canvas = canvasRef.current
+    const img = framesRef.current[index]
+    if (!canvas || !img) return
+
+    const ctx = canvas.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr
+      canvas.height = h * dpr
+      ctx.scale(dpr, dpr)
+    }
+
+    // Object-fit: cover
+    const imgRatio = img.naturalWidth / img.naturalHeight
+    const canvasRatio = w / h
+    let dw, dh, dx, dy
+
+    if (imgRatio > canvasRatio) {
+      dh = h; dw = dh * imgRatio
+      dx = (w - dw) / 2; dy = 0
+    } else {
+      dw = w; dh = dw / imgRatio
+      dx = 0; dy = (h - dh) / 2
+    }
+
+    ctx.clearRect(0, 0, w, h)
+    ctx.drawImage(img, dx, dy, dw, dh)
+  }
+
+  // ── Auto scroll through the sequence ───────────────
   const startAutoScroll = () => {
     const section = sectionRef.current
     if (!section) return
 
     const totalScrollable = section.offsetHeight - window.innerHeight
-    const duration = 5500
+    const duration = 5000
     const start = performance.now()
 
     const step = (now) => {
@@ -79,28 +109,28 @@ export default function Home() {
     autoScrollRaf.current = requestAnimationFrame(step)
   }
 
-  // RAF loop — maps scroll position → video.currentTime at display refresh rate
+  // ── RAF loop: scroll → frame index → canvas ────────
   useEffect(() => {
     let rafId
+    let lastFrame = -1
 
     const tick = () => {
-      const video = videoRef.current
       const section = sectionRef.current
-
-      if (videoReadyRef.current && video?.duration && section) {
+      if (allLoadedRef.current && section) {
         const rect = section.getBoundingClientRect()
         const totalScrollable = section.offsetHeight - window.innerHeight
         const p = Math.max(0, Math.min(1, -rect.top / totalScrollable))
+        const frameIndex = Math.min(
+          Math.round(p * (TOTAL_FRAMES - 1)),
+          TOTAL_FRAMES - 1
+        )
 
-        setScrollProgress(p)
-
-        const target = p * video.duration
-        if (Math.abs(video.currentTime - target) > 0.01) {
-          if ('fastSeek' in video) video.fastSeek(target)
-          else video.currentTime = target
+        if (frameIndex !== lastFrame) {
+          drawFrame(frameIndex)
+          lastFrame = frameIndex
+          currentFrameRef.current = frameIndex
         }
       }
-
       rafId = requestAnimationFrame(tick)
     }
 
@@ -108,10 +138,20 @@ export default function Home() {
     return () => cancelAnimationFrame(rafId)
   }, [])
 
+  // ── Resize handler ──────────────────────────────────
+  useEffect(() => {
+    const onResize = () => drawFrame(currentFrameRef.current)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const loadPct = Math.round((loadedCount / TOTAL_FRAMES) * 100)
+  const scrollPct = Math.round((currentFrameRef.current / (TOTAL_FRAMES - 1)) * 100)
+
   return (
     <main className={styles.main}>
 
-      {/* ── LOADING SCREEN ───────────────────────── */}
+      {/* ── LOADING SCREEN ─────────────────────────────── */}
       <div className={`${styles.loader} ${phase !== 'loading' ? styles.loaderHide : ''}`}>
         <div className={styles.loaderContent}>
           <p className={styles.loaderLabel}>FORMULA 1</p>
@@ -119,11 +159,11 @@ export default function Home() {
           <div className={styles.loaderBarWrap}>
             <div className={styles.loaderBar} style={{ width: `${loadPct}%` }} />
           </div>
-          <p className={styles.loaderPct}>{Math.round(loadPct)}%</p>
+          <p className={styles.loaderPct}>{loadPct}%</p>
         </div>
       </div>
 
-      {/* ── NAV — appears when assembly done ─────── */}
+      {/* ── NAV ────────────────────────────────────────── */}
       <nav className={`${styles.nav} ${assemblyDone ? styles.navVisible : ''}`}>
         <div className={styles.navInner}>
           <span className={styles.navLogo}>F1</span>
@@ -137,31 +177,21 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* ── SCROLL SEQUENCE ──────────────────────── */}
+      {/* ── SCROLL SEQUENCE ────────────────────────────── */}
       <section ref={sectionRef} className={styles.scrollSection}>
         <div className={styles.stickyContainer}>
-          <div className={styles.bgGradient} />
+          <canvas ref={canvasRef} className={styles.assemblyCanvas} />
 
-          <video
-            ref={videoRef}
-            className={styles.assemblyVideo}
-            src="/assembly.mp4"
-            muted
-            autoPlay
-            playsInline
-            preload="auto"
-          />
-
-          {/* Progress bar */}
+          {/* Red progress line */}
           <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: `${scrollProgress * 100}%` }} />
+            <div className={styles.progressFill} style={{ width: `${scrollPct}%` }} />
           </div>
 
-          {/* Assembly complete flash */}
+          {/* ASSEMBLY COMPLETE text fades in at the end */}
           <div
             className={styles.completeOverlay}
             style={{
-              opacity: scrollProgress > 0.85 ? (scrollProgress - 0.85) / 0.15 : 0,
+              opacity: scrollPct > 85 ? (scrollPct - 85) / 15 : 0,
               pointerEvents: 'none'
             }}
           >
@@ -170,7 +200,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── SITE CONTENT ─────────────────────────── */}
+      {/* ── SITE CONTENT ───────────────────────────────── */}
       <div className={`${styles.siteContent} ${assemblyDone ? styles.siteContentVisible : ''}`}>
 
         <section id="cars" className={styles.carsSection}>
