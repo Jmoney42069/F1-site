@@ -12,10 +12,44 @@ export default function Home() {
   const videoReadyRef = useRef(false)
   const assemblyDoneRef = useRef(false)
 
-  // Force video load on all browsers including iOS
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
+    const section = sectionRef.current
+    if (!video || !section) return
+
+    let targetProgress = 0
+    let rafId = null
+
+    // RAF loop — decouples scroll input from seeking, runs at display refresh rate
+    const tick = () => {
+      if (videoReadyRef.current && video.duration) {
+        const targetTime = targetProgress * video.duration
+        const delta = Math.abs(video.currentTime - targetTime)
+        if (delta > 0.01) {
+          if ('fastSeek' in video) {
+            video.fastSeek(targetTime)
+          } else {
+            video.currentTime = targetTime
+          }
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+
+    const handleScroll = () => {
+      const rect = section.getBoundingClientRect()
+      const totalScrollable = section.offsetHeight - window.innerHeight
+      const scrolled = -rect.top
+      const p = Math.max(0, Math.min(1, scrolled / totalScrollable))
+
+      targetProgress = p
+      setProgress(p)
+
+      if (p >= 0.98 && !assemblyDoneRef.current) {
+        assemblyDoneRef.current = true
+        setAssemblyDone(true)
+      }
+    }
 
     const markReady = () => {
       if (videoReadyRef.current) return
@@ -29,38 +63,15 @@ export default function Home() {
     video.addEventListener('canplay', markReady)
     video.load()
 
+    rafId = requestAnimationFrame(tick)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+
     return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('scroll', handleScroll)
       video.removeEventListener('loadedmetadata', markReady)
       video.removeEventListener('canplay', markReady)
     }
-  }, [])
-
-  // Scroll handler — uses refs to avoid stale closures
-  useEffect(() => {
-    const section = sectionRef.current
-    if (!section) return
-
-    const handleScroll = () => {
-      const rect = section.getBoundingClientRect()
-      const totalScrollable = section.offsetHeight - window.innerHeight
-      const scrolled = -rect.top
-      const p = Math.max(0, Math.min(1, scrolled / totalScrollable))
-
-      setProgress(p)
-
-      const video = videoRef.current
-      if (videoReadyRef.current && video && video.duration) {
-        video.currentTime = p * video.duration
-      }
-
-      if (p >= 0.98 && !assemblyDoneRef.current) {
-        assemblyDoneRef.current = true
-        setAssemblyDone(true)
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
   return (
