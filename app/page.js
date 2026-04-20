@@ -9,11 +9,36 @@ export default function Home() {
   const [assemblyDone, setAssemblyDone] = useState(false)
   const [progress, setProgress] = useState(0)
   const [videoReady, setVideoReady] = useState(false)
+  const videoReadyRef = useRef(false)
+  const assemblyDoneRef = useRef(false)
 
+  // Force video load on all browsers including iOS
   useEffect(() => {
     const video = videoRef.current
+    if (!video) return
+
+    const markReady = () => {
+      if (videoReadyRef.current) return
+      video.pause()
+      video.currentTime = 0
+      videoReadyRef.current = true
+      setVideoReady(true)
+    }
+
+    video.addEventListener('loadedmetadata', markReady)
+    video.addEventListener('canplay', markReady)
+    video.load()
+
+    return () => {
+      video.removeEventListener('loadedmetadata', markReady)
+      video.removeEventListener('canplay', markReady)
+    }
+  }, [])
+
+  // Scroll handler — uses refs to avoid stale closures
+  useEffect(() => {
     const section = sectionRef.current
-    if (!video || !section) return
+    if (!section) return
 
     const handleScroll = () => {
       const rect = section.getBoundingClientRect()
@@ -23,26 +48,20 @@ export default function Home() {
 
       setProgress(p)
 
-      if (videoReady && video.duration) {
+      const video = videoRef.current
+      if (videoReadyRef.current && video && video.duration) {
         video.currentTime = p * video.duration
       }
 
-      if (p >= 0.98 && !assemblyDone) {
+      if (p >= 0.98 && !assemblyDoneRef.current) {
+        assemblyDoneRef.current = true
         setAssemblyDone(true)
       }
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [videoReady, assemblyDone])
-
-  const handleVideoLoaded = () => {
-    const video = videoRef.current
-    if (video) {
-      video.pause()
-      setVideoReady(true)
-    }
-  }
+  }, [])
 
   return (
     <main className={styles.main}>
@@ -76,9 +95,9 @@ export default function Home() {
             className={styles.assemblyVideo}
             src="/assembly.mp4"
             muted
+            autoPlay
             playsInline
             preload="auto"
-            onLoadedMetadata={handleVideoLoaded}
           />
 
           {/* Fallback overlay when video not loaded */}
