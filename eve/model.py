@@ -14,12 +14,12 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 
 # --- parameters ---------------------------------------------------------------
 WHEEL_D, WHEEL_W = 65, 26          # same wheel class as the ordered JGA25 motors
-BODY_BOTTOM_Z = 120
-BODY_H, BODY_R = 175, 64           # egg body
+BODY_BOTTOM_Z = 100
+BODY_H, BODY_R = 170, 70           # egg body
 HEAD_GAP = 14                      # "floating" gap between body and head
 HEAD_R, HEAD_H = 54, 42            # half-width, half-height of head spheroid
-LIMB_R = 21                        # max radius of arm/leg teardrop
-ARM_LEN, LEG_LEN = 130, 175
+LIMB_R = 26                        # max radius of arm/leg teardrop
+ARM_LEN, LEG_LEN = 135, 160
 
 
 def revolve_profile(pts):
@@ -31,8 +31,8 @@ def revolve_profile(pts):
 
 def body():
     z0, h, r = BODY_BOTTOM_Z, BODY_H, BODY_R
-    prof = [(0, z0), (22, z0 + 6), (44, z0 + 35), (58, z0 + 80), (r, z0 + 130),
-            (r - 1, z0 + h - 12), (r - 6, z0 + h), (0, z0 + h)]
+    prof = [(0, z0), (34, z0 + 7), (54, z0 + 32), (66, z0 + 75), (r, z0 + 120),
+            (r - 3, z0 + h - 14), (r - 14, z0 + h - 2), (0, z0 + h)]
     return revolve_profile(prof)
 
 
@@ -65,17 +65,21 @@ def eye(zc, side):
     return e.rotate((0, 0, 0), (1, 0, 0), side * -12).translate((x - 3.5, y, zc + 4))
 
 
-def teardrop(top, length, radius, tilt_deg=0.0, flat=0.8):
+def teardrop(top, length, radius, tilt_deg=0.0, flat=0.92):
     """smooth limb: round top, pointed bottom. top = (x, y, z) of the top point."""
-    n = 12
+    n = 16
     wires = []
     tx, ty, tz = top
     for i in range(n + 1):
-        s = 0.015 + 0.97 * i / n
-        if s < 0.22:
-            r = radius * math.sin(math.pi / 2 * s / 0.22)
-        else:
-            r = radius * (1 - (s - 0.22) / 0.78) ** 1.15
+        s = 0.01 + 0.98 * i / n
+        tip = 0.32 * radius
+        if s < 0.25:          # round top
+            r = radius * math.sin(math.pi / 2 * s / 0.25)
+        elif s < 0.85:        # smooth taper
+            u = (s - 0.25) / 0.6
+            r = radius + (tip - radius) * (3 * u * u - 2 * u ** 3)
+        else:                 # round tip, no point
+            r = tip * math.cos(math.pi / 2 * (s - 0.85) / 0.15)
         r = max(r, 0.8)
         z = tz - s * length
         y = ty + math.tan(math.radians(tilt_deg)) * s * length
@@ -94,12 +98,8 @@ def build():
         parts[f"eye_{t}"] = (eye(zc, s), (0.2, 0.6, 1.0))
         parts[f"arm_{t}"] = (teardrop((0, s * (BODY_R + 8), BODY_BOTTOM_Z + BODY_H - 18),
                                       ARM_LEN, LIMB_R * 0.85, tilt_deg=s * 8), (0.86, 0.88, 0.9))
-        hip_z = BODY_BOTTOM_Z + 70
-        leg_top = (0, s * 40, hip_z)
-        parts[f"leg_{t}"] = (teardrop(leg_top, LEG_LEN, LIMB_R, tilt_deg=s * 9), (0.86, 0.88, 0.9))
-        tip_y = s * (40 + math.tan(math.radians(9)) * LEG_LEN * 0.9)
-        parts[f"wheel_{t}"] = (cq.Workplane("XZ").circle(WHEEL_D / 2).extrude(WHEEL_W / 2, both=True)
-                               .translate((0, tip_y + s * (WHEEL_W / 2 + 4), WHEEL_D / 2)), (0.2, 0.2, 0.22))
+        hip_z = BODY_BOTTOM_Z + 60
+        parts[f"leg_{t}"] = (teardrop((0, s * 38, hip_z), hip_z, LIMB_R, tilt_deg=s * 4), (0.86, 0.88, 0.9))
     return parts
 
 
