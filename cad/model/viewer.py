@@ -3,11 +3,12 @@
 import base64
 import os
 
+import json
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "out")
-glb = base64.b64encode(open(os.path.join(OUT, "concept_v0.glb"), "rb").read()).decode()
 
-HTML = r"""<title>Dweilrobo 3D</title>
+HTML = r"""<title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=JetBrains+Mono:wght@400&display=swap">
 <style>
@@ -33,10 +34,10 @@ h1{margin:0;font-size:18px;font-weight:600;text-wrap:balance}
 </style>
 <div id="view"></div>
 <section class="panel">
-  <h1>Dweilrobo, concept v0</h1>
-  <p class="note">Grove blokken om te zien of alles past. Bijna alle maten zijn nog geschat. Tik een groep aan om hem te verbergen.</p>
+  <h1>__H1__</h1>
+  <p class="note">__NOTE__</p>
   <div class="groups" id="groups"></div>
-  <div class="dims">Ø350 mm · hoogte ≈170 mm · pads Ø130</div>
+  <div class="dims">__DIMS__</div>
 </section>
 <div class="hint">Slepen = draaien · scrollen/knijpen = zoomen</div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
@@ -44,16 +45,13 @@ h1{margin:0;font-size:18px;font-weight:600;text-wrap:balance}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 const GLB="__GLB__";
-const GROUPS=[
- ["Frame",["base_plate"],"#d2a86e"],["Bovendek",["top_deck"],"#e8d6b0"],["Lidar",["lidar"],"#b22222"],
- ["Wielen + motoren",["wheel","drive_motor","caster"],"#555"],["Mop-pads",["pad_","mop_motor"],"#6cb4ee"],
- ["Watertank",["tank"],"#9fd0e8"],["Batterij",["battery"],"#e6c229"],["Elektronica",["electronics"],"#8fd18f"]];
+const GROUPS=__GROUPS__;
 const el=document.getElementById("view");
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 const cam=new THREE.PerspectiveCamera(35,1,5,5000);cam.position.set(420,380,-520);
-const ctl=new THREE.OrbitControls(cam,renderer.domElement);ctl.target.set(0,60,0);ctl.enableDamping=true;
+const ctl=new THREE.OrbitControls(cam,renderer.domElement);ctl.target.set(__TGT__);ctl.enableDamping=true;
 scene.add(new THREE.HemisphereLight(0xffffff,0x8899aa,1.1));
 const sun=new THREE.DirectionalLight(0xffffff,0.8);sun.position.set(300,600,-200);scene.add(sun);
 const gridCol=getComputedStyle(document.documentElement).getPropertyValue("--grid").trim()||"#ccc";
@@ -77,5 +75,25 @@ new THREE.GLTFLoader().parse(bytes,"",g=>{
 (function loop(){requestAnimationFrame(loop);ctl.update();renderer.render(scene,cam)})();
 </script>
 """
-open(os.path.join(OUT, "viewer.html"), "w").write(HTML.replace("__GLB__", glb))
-print("wrote cad/out/viewer.html")
+
+
+def make_viewer(glb_path, out_path, title, h1, note, dims, groups, cam="420,380,-520", tgt="0,60,0"):
+    glb = base64.b64encode(open(glb_path, "rb").read()).decode()
+    html = HTML
+    for k, v in (("__TITLE__", title), ("__H1__", h1), ("__NOTE__", note), ("__DIMS__", dims),
+                 ("__GROUPS__", json.dumps(groups)), ("__CAM__", cam), ("__TGT__", tgt), ("__GLB__", glb)):
+        html = html.replace(k, v)
+    open(out_path, "w").write(html)
+
+
+DWEILROBO_GROUPS = [
+    ["Frame", ["base_plate"], "#d2a86e"], ["Bovendek", ["top_deck"], "#e8d6b0"], ["Lidar", ["lidar"], "#b22222"],
+    ["Wielen + motoren", ["wheel", "drive_motor", "caster"], "#555"], ["Mop-pads", ["pad_", "mop_motor"], "#6cb4ee"],
+    ["Watertank", ["tank"], "#9fd0e8"], ["Batterij", ["battery"], "#e6c229"], ["Elektronica", ["electronics"], "#8fd18f"]]
+
+if __name__ == "__main__":
+    make_viewer(os.path.join(OUT, "concept_v0.glb"), os.path.join(OUT, "viewer.html"), "Dweilrobo 3D",
+                "Dweilrobo, concept v0",
+                "Grove blokken om te zien of alles past. Bijna alle maten zijn nog geschat. Tik een groep aan om hem te verbergen.",
+                "Ø350 mm · hoogte ≈170 mm · pads Ø130", DWEILROBO_GROUPS)
+    print("wrote cad/out/viewer.html")
