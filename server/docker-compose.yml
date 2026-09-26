@@ -1,0 +1,9 @@
+# For OpenMediaVault: Services -> Compose -> Files -> add this file (build context = this folder).
+services:
+  hub:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DEVICE_TOKEN=change-me

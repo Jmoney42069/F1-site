@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Home hub</title>
+<style>
+:root{--bg:#f3f5f6;--card:#fff;--ink:#1c2429;--muted:#5f6d75;--line:#d4dbdf;--ok:#1d8a4e;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#12181b;--card:#1a2226;--ink:#e3eaee;--muted:#93a3ab;--line:#2d393f;--ok:#4cc38a;--bad:#f2867e}}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,sans-serif;padding:24px 16px}
+main{max-width:720px;margin:0 auto;display:grid;gap:14px}
+h1{margin:0;font-size:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px 20px}
+.k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.v{font:14px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+button{font:inherit;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:6px 12px;cursor:pointer}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ok);margin-right:6px}
+#log{font:12px ui-monospace,monospace;color:var(--muted);white-space:pre-wrap}
+</style>
+</head>
+<body><main>
+<h1>Home hub</h1>
+<div id="devices"><p>Nog geen apparaten verbonden.</p></div>
+<div id="log"></div>
+</main>
+<script>
+const colors={Rood:[40,0,0],Groen:[0,40,0],Blauw:[0,0,40],Uit:[0,0,0]};
+const log=t=>{const l=document.getElementById('log');l.textContent=(new Date().toLocaleTimeString()+'  '+t+'\n'+l.textContent).slice(0,2000)};
+async function cmd(id,name,args){
+  const r=await fetch(`/api/devices/${encodeURIComponent(id)}/cmd`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,args})});
+  const j=await r.json();log(`${id} ${name}: ${r.ok?'ok, '+j.roundtrip_ms+' ms heen en terug':'fout: '+(j.detail||r.status)}`);
+}
+function field(k,v){return `<div><div class="k">${k}</div><div class="v">${v??'–'}</div></div>`}
+async function refresh(){
+  const r=await fetch('/api/devices');const ds=await r.json();const box=document.getElementById('devices');
+  if(!ds.length){box.innerHTML='<p>Nog geen apparaten verbonden.</p>';return}
+  box.innerHTML=ds.map(d=>`<section class="card"><div><span class="dot"></span><b>${d.id}</b> <span class="v">fw ${d.fw}</span></div>
+   <div class="row">${field('Ping nu',d.rtt_ms+' ms')}${field('Mediaan',d.rtt_p50_ms+' ms')}${field('95%',d.rtt_p95_ms==null?null:d.rtt_p95_ms+' ms')}
+   ${field('Wi-Fi',d.telemetry.rssi==null?null:d.telemetry.rssi+' dBm')}${field('Online',d.online_s+' s')}</div>
+   <div class="row">${Object.keys(colors).map(c=>`<button data-id="${d.id}" data-c="${c}">${c}</button>`).join('')}</div></section>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{const [r,g,bl]=colors[b.dataset.c];cmd(b.dataset.id,'led',{r,g,b:bl})});
+}
+setInterval(refresh,1000);refresh();
+</script>
+</body></html>
